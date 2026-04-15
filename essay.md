@@ -1,0 +1,24 @@
+**AWS Security and Access Control Review**
+**Introduction**
+The described setup contains several critical security vulnerabilities that expose the company to data breaches, unauthorized access, and compliance failures. Each problem can be addressed with AWS-native tools and well-established best practices.
+
+**Risk 1: Using the Root Account for Daily Operations**
+The AWS root account has unrestricted access to every service and billing function in the account. Using it for daily work means that if the credentials are stolen or accidentally leaked through a public GitHub repository, a phishing attack, or a compromised machine, an attacker gains complete control over the entire AWS environment. There is no way to scope or limit what the root account can do. The root account should only be used for the initial account setup and a small number of tasks that explicitly require it, such as changing the account email or enabling MFA on the account itself. After that, it should be locked away with a strong password and MFA enabled, and never used again for routine work.
+
+**Risk 2: Shared Login Across the Team**
+When multiple people share a single set of credentials, there is no way to know who performed which action. If something goes wrong, such as a misconfiguration, a deletion, or a data leak, there is no audit trail to trace the cause. Shared credentials also mean that when someone leaves the team, you cannot remove their access without disrupting everyone else.
+The correct approach is to create individual IAM users for every person who needs access. Each user gets their own credentials and only the permissions they need to do their job, following the principle of least privilege. If a team member leaves, their account is disabled without affecting anyone else. AWS CloudTrail logs every API call with the identity of the caller, so individual accounts make auditing meaningful.
+
+**Risk 3: SSH Open to the World (0.0.0.0/0)**
+Allowing SSH on port 22 from any IP address means every device on the internet can attempt to connect to your EC2 instances. Automated bots constantly scan the internet for open SSH ports and attempt brute-force attacks. Even with strong passwords or key-based authentication, exposing SSH publicly increases the attack surface unnecessarily.
+The fix has two parts. First, the Security Group should restrict port 22 to specific trusted IP addresses, ideally just the IP of a bastion host. Second, a bastion host (also called a jump server) should be deployed as the single entry point for all SSH connections. Developers connect to the bastion host first, and from there they reach the private EC2 instances. The application servers never accept direct SSH connections from the internet. This keeps the main infrastructure completely isolated.
+
+**Risk 4: S3 Without Access Controls**
+Storing backups in S3 without considering access controls creates two risks. First, if the bucket is accidentally made public, sensitive backup data becomes accessible to anyone on the internet. Second, even within the AWS account, any user or service that has broad permissions could read, overwrite, or delete those backups.
+The correct approach involves three measures. Bucket policies should explicitly deny public access, and S3 Block Public Access settings should be enabled at the bucket level as a failsafe. IAM roles should be used to grant EC2 instances the minimum permissions needed, for example write-only access to upload backups, but not the ability to delete them. Finally, S3 Versioning and Object Lock can prevent accidental or malicious deletion of backup files.
+
+**How IAM Roles Should Be Used**
+Rather than embedding AWS credentials inside EC2 instances or application code, IAM roles should be attached directly to EC2 instances. When a role is attached, the instance can call AWS services like writing to S3 without any stored access keys. This eliminates the risk of credentials being leaked through code repositories or configuration files. Each role should follow least privilege: the EC2 role gets only the permissions that specific instance actually needs.
+
+**Conclusion**
+None of the problems described in this scenario require expensive tools or complex architecture changes. Disabling root account use, creating individual IAM users, restricting SSH to a bastion host, and applying proper S3 bucket policies are all straightforward steps. Together they dramatically reduce the company's attack surface and bring the environment in line with AWS security best practices. Security is not a feature added at the end. It is a set of decisions made at every stage of the design.
